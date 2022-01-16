@@ -5,3 +5,16 @@ stock:
     historical-quote: https://api.stockdata.org/v1/data/eod/multiple?symbols=%s&date=%s&api_token=%s
 server:
   port:8010
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/account
+    username: account
+    password: account
+  jpa:
+    show-sql: true
+
+security:
+  jwt:
+    expiration: 600
+    secret: c2VjcmV0
