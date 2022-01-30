@@ -1,59 +1,53 @@
 package com.example.stockservice.secutity;
 
-import com.example.stockservice.secutity.jwt.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
 
-    private final DbUserDetailService dbUserDetailService;
-    private final JwtAuthFilter jwtAuthFilter;
+    @Value("${auth.audience}")
+    private String audience;
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.userDetailsService(dbUserDetailService);
-    }
+    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    private String issuerUri;
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         http
                 .csrf().disable()
-                .authorizeRequests().antMatchers("/get-stock-quotes").hasAnyAuthority("BASE", "PRO")
-                .antMatchers("/get-historical-quotes").hasAuthority("PRO")
-                .and().authorizeRequests().antMatchers("/auth/**").permitAll()
-                .and().authorizeRequests().anyRequest().authenticated()
-                .and().httpBasic()
-                .and().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-        http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .authorizeRequests()
+                .antMatchers("/get-stock-quotes").hasAnyAuthority("SCOPE_base", "SCOPE_pro")
+                .antMatchers("/get-historical-quotes").hasAuthority("SCOPE_pro")
+                .and()
+                .authorizeRequests().anyRequest().authenticated()
+                .and()
+                .oauth2ResourceServer().jwt();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder jwtDecoder = JwtDecoders.fromOidcIssuerLocation(issuerUri);
 
-    @Bean
-    public AuthenticationManager authenticationManagerBean() {
-        try {
-            return super.authenticationManagerBean();
-        } catch (Exception e) {
-            log.error("Error creating authenticationManagerBean", e);
-            throw new BeanCreationException("Error creating authenticationManagerBean");
-        }
+        OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(audience);
+        OAuth2TokenValidator<Jwt> issuerValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
+        OAuth2TokenValidator<Jwt> delegatingValidator = new DelegatingOAuth2TokenValidator<>(issuerValidator, audienceValidator);
+
+        jwtDecoder.setJwtValidator(delegatingValidator);
+        return jwtDecoder;
     }
 }
