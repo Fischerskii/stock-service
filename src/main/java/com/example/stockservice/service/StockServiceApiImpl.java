@@ -12,7 +12,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 @Service
-class StockServiceApiImpl implements StockServiceApi{
+class StockServiceApiImpl implements StockServiceApi {
 
     private final RestTemplate restTemplate;
     private final String token;
